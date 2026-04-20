@@ -35,8 +35,11 @@ package fr.paris.lutece.plugins.search.solr.business;
 
 import fr.paris.lutece.portal.service.util.AppLogService;
 import fr.paris.lutece.portal.service.util.AppPropertiesService;
+
+import java.util.concurrent.TimeUnit;
+
 import org.apache.solr.client.solrj.SolrClient;
-import org.apache.solr.client.solrj.impl.Http2SolrClient;
+import org.apache.solr.client.solrj.impl.HttpJdkSolrClient;
 
 /**
  * This service provides an instance of SolrServer.
@@ -109,9 +112,9 @@ public final class SolrServerService
     private SolrClient createSolrServer( String strServerUrl )
     {
         AppLogService.info("Connection Solr configured on {} using http/{}", strServerUrl, ( SOLR_USE_HTTP1_1 ? "1.1" : "2" ) );
-        return new Http2SolrClient.Builder( strServerUrl )
-                .connectionTimeout( SOLR_CONNECTION_TIMEOUT )
-                .idleTimeout( SOLR_IDLE_TIMEOUT )
+        return new HttpJdkSolrClient.Builder( strServerUrl )
+                .withConnectionTimeout( SOLR_CONNECTION_TIMEOUT, TimeUnit.MILLISECONDS )
+                .withIdleTimeout( SOLR_IDLE_TIMEOUT, TimeUnit.MILLISECONDS )
                 .withBasicAuthCredentials( SOLR_HTTP_BASIC_AUTH_USER, SOLR_HTTP_BASIC_AUTH_PASSWORD )
                 .useHttp1_1( SOLR_USE_HTTP1_1 ).build( );
     }

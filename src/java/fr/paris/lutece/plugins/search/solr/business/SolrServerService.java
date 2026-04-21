@@ -33,10 +33,21 @@
  */
 package fr.paris.lutece.plugins.search.solr.business;
 
+import fr.paris.lutece.portal.service.util.AppException;
 import fr.paris.lutece.portal.service.util.AppLogService;
 import fr.paris.lutece.portal.service.util.AppPropertiesService;
+import jakarta.enterprise.context.spi.CreationalContext;
+import jakarta.enterprise.inject.spi.Bean;
+import jakarta.enterprise.inject.spi.BeanManager;
+import jakarta.enterprise.inject.spi.CDI;
+
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+
 import org.apache.solr.client.solrj.SolrClient;
-import org.apache.solr.client.solrj.impl.Http2SolrClient;
+import org.apache.solr.client.solrj.impl.HttpJdkSolrClient;
 
 /**
  * This service provides an instance of SolrServer.
@@ -108,11 +119,53 @@ public final class SolrServerService
      */
     private SolrClient createSolrServer( String strServerUrl )
     {
-        AppLogService.info("Connection Solr configured on {} using http/{}", strServerUrl, ( SOLR_USE_HTTP1_1 ? "1.1" : "2" ) );
-        return new Http2SolrClient.Builder( strServerUrl )
-                .connectionTimeout( SOLR_CONNECTION_TIMEOUT )
-                .idleTimeout( SOLR_IDLE_TIMEOUT )
-                .withBasicAuthCredentials( SOLR_HTTP_BASIC_AUTH_USER, SOLR_HTTP_BASIC_AUTH_PASSWORD )
-                .useHttp1_1( SOLR_USE_HTTP1_1 ).build( );
+        SolrClient client = null;
+    	try
+        {
+        	Object embeddedSolrServerService = getBeanByName( "embeddedSolrServerService" );
+        	if( embeddedSolrServerService != null )
+        	{
+        		AppLogService.info("Connection Solr configured on {} (Embedded server) ", strServerUrl );
+        		Method method = embeddedSolrServerService.getClass( ).getDeclaredMethod( "getServer", null );
+            	client = ( SolrClient )method.invoke( embeddedSolrServerService, null );
+        	}
+        	else
+        	{
+        		AppLogService.info("Connection Solr configured on {} using http/{}", strServerUrl, ( SOLR_USE_HTTP1_1 ? "1.1" : "2" ) );
+                client =  new HttpJdkSolrClient.Builder( strServerUrl )
+                        .withConnectionTimeout( SOLR_CONNECTION_TIMEOUT, TimeUnit.MILLISECONDS )
+                        .withIdleTimeout( SOLR_IDLE_TIMEOUT, TimeUnit.MILLISECONDS )
+                        .withBasicAuthCredentials( SOLR_HTTP_BASIC_AUTH_USER, SOLR_HTTP_BASIC_AUTH_PASSWORD )
+                        .useHttp1_1( SOLR_USE_HTTP1_1 ).build( );
+        	}
+        	
+        }
+    	catch( InvocationTargetException e )
+        {
+    		throw new AppException( "Solr error : ", e );
+        }
+    	catch( NoSuchMethodException e )
+        {
+    		throw new AppException( "Solr error : ", e );
+        }
+    	catch( IllegalAccessException e )
+        {
+    		throw new AppException( "Solr error : ", e );
+        }
+        return client;
+    }
+    
+    public Object getBeanByName( String name ) 
+    {
+    	Bean<?> bean = null;
+    	BeanManager beanManager = CDI.current().getBeanManager();
+        Set<Bean<?>> beans = beanManager.getBeans( name );
+        bean = beanManager.resolve( beans );
+        if( bean == null)
+        {
+        	return null;
+        }
+        CreationalContext<?> ctx = beanManager.createCreationalContext(bean);
+        return beanManager.getReference(bean, bean.getBeanClass(), ctx);
     }
 }
